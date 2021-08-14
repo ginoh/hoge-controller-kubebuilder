@@ -28,14 +28,27 @@ type HogeSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Hoge. Edit hoge_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Format:=string
+
+	// the name of deployment which is owned by hoge
+	DeploymentName string `json:"deploymentName"`
+
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=0
+
+	// the replicas of deployment which is owned by hoge
+	Replicas *int32 `json:"replicas"`
 }
 
 // HogeStatus defines the observed state of Hoge
 type HogeStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// this is equal deployment.status.availableReplicas
+	// +optional
+	AvailableReplicas int32 `json:"availableReplicas"`
 }
 
 //+kubebuilder:object:root=true
