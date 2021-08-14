@@ -19,7 +19,10 @@ package controllers
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -30,7 +33,8 @@ import (
 // HogeReconciler reconciles a Hoge object
 type HogeReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=samplecontroller.example.com,resources=hoges,verbs=get;list;watch;create;update;patch;delete
@@ -46,17 +50,58 @@ type HogeReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
-func (r *HogeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
 
-	// your logic here
+// +kubebuilder:rbac:groups=samplecontroller.example.com,resources=hoges,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=samplecontroller.example.com,resources=hoges/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+
+func (r *HogeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	var hoge samplecontrollerv1alpha1.Hoge
+	logger.Info("fetching Hoge Resource")
+	if err := r.Get(ctx, req.NamespacedName, &hoge); err != nil {
+		logger.Error(err, "unable to fetch Hoge")
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
 
 	return ctrl.Result{}, nil
 }
 
+var (
+	deploymentOwnerKey = ".metadata.controller"
+	apiGVStr           = samplecontrollerv1alpha1.GroupVersion.String()
+)
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *HogeReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	ctx := context.Background()
+
+	// add deploymentOwnerKey index to deployment object which foo resource owns
+	if err := mgr.GetFieldIndexer().IndexField(ctx, &appsv1.Deployment{}, deploymentOwnerKey, func(rawObj client.Object) []string {
+		// grab the deployment object, extract the owner...
+		deployment := rawObj.(*appsv1.Deployment)
+		owner := metav1.GetControllerOf(deployment)
+		if owner == nil {
+			return nil
+		}
+		// ...make sure it's a Hoge...
+		if owner.APIVersion != apiGVStr || owner.Kind != "Hoge" {
+			return nil
+		}
+
+		// ...and if so, return it
+		return []string{owner.Name}
+	}); err != nil {
+		return err
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&samplecontrollerv1alpha1.Hoge{}).
+		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
