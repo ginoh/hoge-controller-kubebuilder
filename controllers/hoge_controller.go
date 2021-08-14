@@ -20,6 +20,7 @@ import (
 	"context"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -72,6 +73,39 @@ func (r *HogeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	return ctrl.Result{}, nil
 }
 
+// cleanupOwnedResources will delete any existing Deployment resources that
+// were created for the given Foo that no longer match the
+// foo.spec.deploymentName field.
+func (r *HogeReconciler) cleanupOwnedResources(ctx context.Context, hoge *samplecontrollerv1alpha1.Hoge) error {
+	logger := log.FromContext(ctx)
+
+	logger.Info("finding existing Deployments for Hoge resource")
+
+	// List all deployment resources owned by this Hoge
+	var deployments appsv1.DeploymentList
+	if err := r.List(ctx, &deployments, client.InNamespace(hoge.Namespace), client.MatchingFields(map[string]string{deploymentOwnerKey: hoge.Name})); err != nil {
+		return err
+	}
+
+	// Delete deployment if the deployment name doesn't match hoge.spec.deploymentName
+	for _, deployment := range deployments.Items {
+		if deployment.Name == hoge.Spec.DeploymentName {
+			continue
+		}
+
+		// Delete old deployment object which doesn't match foo.spec.deploymentName
+		if err := r.Delete(ctx, &deployment); err != nil {
+			logger.Error(err, "failed to delete Deployment resource")
+			return err
+		}
+
+		logger.Info("delete deployment resource: " + deployment.Name)
+		r.Recorder.Eventf(hoge, corev1.EventTypeNormal, "Deleted", "Deleted deployment %q", deployment.Name)
+	}
+
+	return nil
+}
+
 var (
 	deploymentOwnerKey = ".metadata.controller"
 	apiGVStr           = samplecontrollerv1alpha1.GroupVersion.String()
@@ -89,12 +123,11 @@ func (r *HogeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if owner == nil {
 			return nil
 		}
-		// ...make sure it's a Hoge...
+
 		if owner.APIVersion != apiGVStr || owner.Kind != "Hoge" {
 			return nil
 		}
 
-		// ...and if so, return it
 		return []string{owner.Name}
 	}); err != nil {
 		return err
