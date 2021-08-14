@@ -1,0 +1,7 @@
+apiVersion: samplecontroller.example.com/v1alpha1
+kind: Hoge
+metadata:
+  name: hoge-sample
+spec:
+  # Add fields here
+  foo: bar

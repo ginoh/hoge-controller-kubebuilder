@@ -3,4 +3,14 @@ layout:
 - go.kubebuilder.io/v3
 projectName: hoge-controller-kubebuilder
 repo: github.com/ginoh/hoge-controller-kubebuilder
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: example.com
+  group: samplecontroller
+  kind: Hoge
+  path: github.com/ginoh/hoge-controller-kubebuilder/api/v1alpha1
+  version: v1alpha1
 version: "3"
