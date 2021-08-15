@@ -34,8 +34,7 @@ type HogeSpec struct {
 	// the name of deployment which is owned by hoge
 	DeploymentName string `json:"deploymentName"`
 
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Optional
 
 	// the replicas of deployment which is owned by hoge
 	Replicas *int32 `json:"replicas"`

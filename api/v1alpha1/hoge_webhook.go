@@ -17,7 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -42,7 +45,10 @@ var _ webhook.Defaulter = &Hoge{}
 func (r *Hoge) Default() {
 	hogelog.Info("default", "name", r.Name)
 
-	// TODO(user): fill in your defaulting logic.
+	if r.Spec.Replicas == nil {
+		r.Spec.Replicas = new(int32)
+		*r.Spec.Replicas = 1
+	}
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
@@ -54,16 +60,14 @@ var _ webhook.Validator = &Hoge{}
 func (r *Hoge) ValidateCreate() error {
 	hogelog.Info("validate create", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object creation.
-	return nil
+	return r.validateHoge()
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *Hoge) ValidateUpdate(old runtime.Object) error {
 	hogelog.Info("validate update", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object update.
-	return nil
+	return r.validateHoge()
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
@@ -71,5 +75,29 @@ func (r *Hoge) ValidateDelete() error {
 	hogelog.Info("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
+	return nil
+}
+
+func (r *Hoge) validateHoge() error {
+	var allErrs field.ErrorList
+	if err := r.validateDeploymentName(); err != nil {
+		allErrs = append(allErrs, err)
+	}
+	if len(allErrs) == 0 {
+		return nil
+	}
+
+	return apierrors.NewInvalid(
+		schema.GroupKind{Group: "samplecontroller.example.com", Kind: "Hoge"},
+		r.Name, allErrs)
+}
+
+// Validating the the length of DeploymentName field.
+func (r *Hoge) validateDeploymentName() *field.Error {
+	// object name must be no more than 253 characters.
+	// ref. https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+	if len(r.Spec.DeploymentName) > 253 {
+		return field.Invalid(field.NewPath("spec").Child("deploymentName"), r.Spec.DeploymentName, "must be no more than 253 characters")
+	}
 	return nil
 }
